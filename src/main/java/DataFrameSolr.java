@@ -114,7 +114,7 @@ public class DataFrameSolr {
         return version;
     }
 
-    public static ArrayList<SolrInputDocument> convertToSolrDocuments(DataFrame df, String cType, Integer version)
+    public ArrayList<SolrInputDocument> convertToSolrDocuments(DataFrame df, String cType, Integer version)
     {
         SolrInputDocument s = new SolrInputDocument();
         StructType styp = df.schema();
@@ -219,10 +219,16 @@ public class DataFrameSolr {
                 for (int inner=0; inner<solrDocumentList.size(); inner++)
                 {
                     if (df.get(inner) != null) {
-                        if (!sf.dataType().isPrimitive() && sf.dataType().typeName().equals("array"))
+                        if (sf.dataType().typeName().equals("array"))
                         {
                             //Tuple2<String,Object> suffixandvalue = getArrayToString(sf.dataType(), df.get(inner).get(counter));
                             solrDocumentList.get(inner).addField(sf.name() + "_s", getArrayToString(sf.dataType(), df.get(inner).get(counter)));
+                        }
+                        else if (sf.dataType().typeName().equals("matrix"))
+                        {
+                            //Tuple2<String,Object> suffixandvalue = getArrayToString(sf.dataType(), df.get(inner).get(counter));
+                            Matrix m = (Matrix) df.get(inner).get(counter);
+                            solrDocumentList.get(inner).addField(sf.name() + "_s",  m.numRows() + ":" + m.numCols() + ":" + Arrays.toString(m.toArray()));
                         }
                         else
                         {
@@ -303,7 +309,7 @@ public class DataFrameSolr {
                         }
                         else if (type.equals("decimal"))
                         {
-
+                            x.add(convertToDecimal(x1.get(x2[i]).toString()));
                         }
                         else if (type.equals("boolean"))
                         {
@@ -317,9 +323,13 @@ public class DataFrameSolr {
                         {
 
                         }
-                        else if (type.equals("vecto"))
+                        else if (type.equals("vector"))
                         {
                             x.add(convertToVector(x1.get(x2[i]).toString()));
+                        }
+                        else if (type.equals("matrix"))
+                        {
+                            x.add(convertToMatrix(x1.get(x2[i]).toString()));
                         }
                         else if (type.contains(":"))
                         {
@@ -408,7 +418,7 @@ public class DataFrameSolr {
 
     public static Object getmllibDataType(String s)
     {
-        if (s.toLowerCase().equals("vecto"))
+        if (s.toLowerCase().equals("vector"))
         {
             return Vector.class.toString();
         }
@@ -453,9 +463,13 @@ public class DataFrameSolr {
         {
             return DataTypes.DateType;
         }
-        if (s.toLowerCase().equals("vecto"))
+        if (s.toLowerCase().equals("vector"))
         {
             return new VectorUDT();
+        }
+        if (s.toLowerCase().equals("matrix"))
+        {
+            return new MatrixUDT();
         }
         if (s.contains(":") && s.split(":")[0].toLowerCase().equals("array"))
         {
@@ -657,6 +671,11 @@ public class DataFrameSolr {
         return Long.parseLong(s);
     }
 
+    public static Decimal convertToDecimal(String s)
+    {
+        return Decimal.apply(s);
+    }
+
     public static Boolean convertToBoolean(String s)
     {
         return Boolean.parseBoolean(s);
@@ -773,7 +792,18 @@ public class DataFrameSolr {
         return Vectors.parse(s);
     }
 
-
+    public static org.apache.spark.mllib.linalg.Matrix convertToMatrix(String s)
+    {
+        String[] data = s.split(":");
+        String dataArray = data[2];
+        String[] items = dataArray.replaceFirst("\\[", "").substring(0,dataArray.replaceFirst("\\[", "").lastIndexOf("]")).split(",");
+        double[] doubleArray = new double[items.length];
+        for (int i = 0; i<items.length; i++)
+        {
+            doubleArray[i] = Double.parseDouble(items[i]);
+        }
+        return Matrices.dense(Integer.parseInt(data[0]),Integer.parseInt(data[1]),doubleArray);
+    }
 
 
 }
